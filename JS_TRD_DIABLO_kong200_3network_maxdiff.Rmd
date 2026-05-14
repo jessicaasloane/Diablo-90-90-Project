@@ -1,0 +1,678 @@
+---
+title: "TRD DIABLO: Multiband with 3 networks and Maxdiff"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+date: "2025-05-23"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file("/data/leey19/sandbox/TRD_DIABLO/DIABLO_conn/LCMV/kong2022_200_2/subtype"))
+
+```
+
+
+
+## max difference model
+
+### Setup the environment
+
+The input sample size was 178, 86 for HCs and 92 for MDDs.
+
+```{r, include=FALSE}
+
+rm(list = ls())
+
+#BiocManager::install('mixOmics')
+library(mixOmics) # import the mixOmics library
+library(dplyr)
+library(moments)
+library(robustHD)
+
+set.seed(4982)
+
+#file.choose()
+setwd("/data/MoodMEG/trd_project/sample_JSloan/")
+# setwd("/Users/leey19/Library/CloudStorage/OneDrive-NationalInstitutesofHealth/Documents/NIH_Postdoc/Sandbox/TRD_DIABLO/results/LCMV/kong2022_200_2/")
+
+ids <- read.csv("TRD_DIABLO_group_MDDtype.csv")
+
+table(ids$Group)
+
+```
+
+### Setup the values
+
+#### Setup the X1 value using the Default Mode Network (DMN) correlatioin coefficient
+
+Potentially outlier: CWJYSXBI
+
+```{r, warning=FALSE, message=FALSE}
+
+X0 <- read.csv("envcorr_kong200_all_default_FIN.csv",header=T)
+
+transform_group <- function(data) {
+  numeric_data <- data[, sapply(data, is.numeric)]
+  log_data <- log(numeric_data)
+  robust_scale <- function(x) {
+    med <- median(x)
+    iqr <- IQR(x)
+    scaled_data <- (x - med) / iqr
+    scaled_data[scaled_data > 3] <- 3
+    scaled_data[scaled_data < -3] <- -3
+    return(scaled_data)
+  }
+  scaled_data <- apply(log_data, 2, robust_scale)
+  return(scaled_data)
+}
+
+X0.1 <- X0 %>% select(where(~ !any(is.na(.))))
+X0.1 <- X0.1[order(X0.1$ID),]
+X0.1 <- merge(X0.1, ids, by="ID")
+X0.2_list <- split(X0.1, X0.1$Group)
+X0.2_transformed <- lapply(X0.2_list, function(group_data) {
+    group_data_sub <- group_data[, !(names(group_data) %in% c("ID", "Group"))]
+    transformed_data <- transform_group(group_data_sub)
+    data.frame(ID = group_data$ID, transformed_data)
+})
+X0.3 <- do.call(rbind, X0.2_transformed)
+rownames(X0.3) <- X0.3$ID
+
+X1 <- X0.3
+
+
+```
+
+#### Setup the X2 value using the Executive Control Network (ECN) correlatioin coefficient
+
+Potentially outlier: DIIOFUND
+
+```{r, warning=FALSE, message=FALSE, include=FALSE}
+
+
+X0 <- read.csv("envcorr_kong200_all_control_FIN.csv",header=T)
+
+X0.1 <- X0 %>% select(where(~ !any(is.na(.))))
+X0.1 <- X0.1[order(X0.1$ID),]
+X0.1 <- merge(X0.1, ids, by="ID")
+X0.2_list <- split(X0.1, X0.1$Group)
+X0.2_transformed <- lapply(X0.2_list, function(group_data) {
+  group_data_sub <- group_data[, !(names(group_data) %in% c("ID", "Group"))]
+  transformed_data <- transform_group(group_data_sub)
+  data.frame(ID = group_data$ID, transformed_data)
+})
+X0.3 <- do.call(rbind, X0.2_transformed)
+rownames(X0.3) <- X0.3$ID
+
+X2 <- X0.3
+
+
+```
+
+
+
+#### Setup the X3 value using the Sailience Network (SN) correlatioin coefficient
+
+Potentially outlier: DIIOFUND
+
+```{r, warning=FALSE, message=FALSE, include=FALSE}
+
+X0 <- read.csv("envcorr_kong200_all_salience_FIN.csv",header=T)
+
+X0.1 <- X0 %>% select(where(~ !any(is.na(.))))
+X0.1 <- X0.1[order(X0.1$ID),]
+X0.1 <- merge(X0.1, ids, by="ID")
+X0.2_list <- split(X0.1, X0.1$Group)
+X0.2_transformed <- lapply(X0.2_list, function(group_data) {
+  group_data_sub <- group_data[, !(names(group_data) %in% c("ID", "Group"))]
+  transformed_data <- transform_group(group_data_sub)
+  data.frame(ID = group_data$ID, transformed_data)
+})
+X0.3 <- do.call(rbind, X0.2_transformed)
+rownames(X0.3) <- X0.3$ID
+
+X3 <- X0.3
+
+
+
+```
+
+
+#### Setup the X4 value using the Doral Attentional Network (DAN) correlatioin coefficient
+
+Potentially outlier: GMZHYQVF
+
+```{r, warning=FALSE, message=FALSE, include=FALSE}
+
+X0 <- read.csv("envcorr_kong200_all_dorsatt_FIN.csv",header=T)
+
+X0.1 <- X0 %>% select(where(~ !any(is.na(.))))
+X0.1 <- X0.1[order(X0.1$ID),]
+X0.1 <- merge(X0.1, ids, by="ID")
+X0.2_list <- split(X0.1, X0.1$Group)
+X0.2_transformed <- lapply(X0.2_list, function(group_data) {
+  group_data_sub <- group_data[, !(names(group_data) %in% c("ID", "Group"))]
+  transformed_data <- transform_group(group_data_sub)
+  data.frame(ID = group_data$ID, transformed_data)
+})
+X0.3 <- do.call(rbind, X0.2_transformed)
+rownames(X0.3) <- X0.3$ID
+
+X4 <- X0.3
+
+
+```
+
+
+
+#### Setup the X5 value using the Motor Network (MN) correlatioin coefficient
+
+Potentially outlier: FQTIDXBD & WNKOWTSP
+
+```{r, warning=FALSE, message=FALSE, include=FALSE}
+
+X0 <- read.csv("envcorr_kong200_all_motor_FIN.csv",header=T)
+
+X0.1 <- X0 %>% select(where(~ !any(is.na(.))))
+X0.1 <- X0.1[order(X0.1$ID),]
+X0.1 <- merge(X0.1, ids, by="ID")
+X0.2_list <- split(X0.1, X0.1$Group)
+X0.2_transformed <- lapply(X0.2_list, function(group_data) {
+  group_data_sub <- group_data[, !(names(group_data) %in% c("ID", "Group"))]
+  transformed_data <- transform_group(group_data_sub)
+  data.frame(ID = group_data$ID, transformed_data)
+})
+X0.3 <- do.call(rbind, X0.2_transformed)
+rownames(X0.3) <- X0.3$ID
+
+X5 <- X0.3
+
+
+```
+
+
+#### Setup the X6 value using the Visual Network (VN) correlatioin coefficient
+
+Potentially outlier: ETWNABKX
+
+```{r, warning=FALSE, message=FALSE, include=FALSE}
+
+X0 <- read.csv("envcorr_kong200_all_visual_FIN.csv",header=T)
+
+X0.1 <- X0 %>% select(where(~ !any(is.na(.))))
+X0.1 <- X0.1[order(X0.1$ID),]
+X0.1 <- merge(X0.1, ids, by="ID")
+X0.2_list <- split(X0.1, X0.1$Group)
+X0.2_transformed <- lapply(X0.2_list, function(group_data) {
+  group_data_sub <- group_data[, !(names(group_data) %in% c("ID", "Group"))]
+  transformed_data <- transform_group(group_data_sub)
+  data.frame(ID = group_data$ID, transformed_data)
+})
+X0.3 <- do.call(rbind, X0.2_transformed)
+rownames(X0.3) <- X0.3$ID
+
+X6 <- X0.3
+
+```
+
+
+#### Setup the X and Y values using the clinician-driven diagnosis
+
+from 178
+
+We merged the X1 to X6 while log-scaling values. The dimension of the available data are:
+
+1. DMN: 178 individuals with 253 variables (unique correlation coefficients)
+2. ECN: 178 individuals with 120 variables (unique correlation coefficients)
+3. SN: 178 individuals with 105 variables (unique correlation coefficients)
+4. DAN: 178 individuals with 66 variables (unique correlation coefficients)
+5. MN: 178 individuals with 66 variables (unique correlation coefficients)
+6. VN: 178 individuals with 105 variables (unique correlation coefficients)
+8. Y: RISC groups ( for 86 HC; for 92 MDD)
+
+
+
+```{r, warning=FALSE, message=FALSE, include=FALSE}
+
+
+# Y_name <- X1[,1]
+# 
+# rownames(X1) <- Y_name
+# rownames(X2) <- Y_name
+# rownames(X3) <- Y_name
+# rownames(X4) <- Y_name
+# rownames(X5) <- Y_name
+# rownames(X6) <- Y_name
+# 
+# library(ExPosition)
+# res <- epPCA(X6[-1], DESIGN=Y_name)
+# sort(res$ExPosition.Data$eigs)
+# sort(res$ExPosition.Data$t)
+# sort(res$ExPosition.Data$fi[,1])
+
+#X1: IFU/LNK/QZU/OEN/ITV/JBG/BDP
+#X2: IFU/LNK/QZU/OEN/XBG/ITV/TUJ
+#X3: IFU/LNK/QZU/ITV/OEN
+#X4: IFU/LNK/ITV/XBG/QZU/OEN
+#X5: IFU/LNK/QZU/ITV/OEN
+#X6: IFU/LNK/XBG/CTX/OEN/JBG/ITV
+
+# outlier: IFU/LNK/ITV/XBG/QZU/OEN
+
+
+# ### Omit the participants
+# # same individual drop: WNKOWTSP
+
+
+
+
+X1.1 <- X1 %>%
+  filter(ID != 'WNKOWTSP' & ID != 'IFUOWLYC' & ID != 'QZUBAVVA' & ID != 'DWYASHSC' & ID != 'FQTIDXBD'& ID != 'LNKRYMPE'& ID != 'OENJHTBX'& ID != 'IBTXSVUE'& ID != 'TUJTIRFK'& ID != 'ITVESALZ')
+X2.1 <- X2 %>%
+  filter(ID != 'WNKOWTSP' & ID != 'IFUOWLYC' & ID != 'QZUBAVVA' & ID != 'DWYASHSC' & ID != 'FQTIDXBD'& ID != 'LNKRYMPE'& ID != 'OENJHTBX'& ID != 'IBTXSVUE'& ID != 'TUJTIRFK'& ID != 'ITVESALZ')
+X3.1 <- X3 %>%
+  filter(ID != 'WNKOWTSP' & ID != 'IFUOWLYC' & ID != 'QZUBAVVA' & ID != 'DWYASHSC' & ID != 'FQTIDXBD'& ID != 'LNKRYMPE'& ID != 'OENJHTBX'& ID != 'IBTXSVUE'& ID != 'TUJTIRFK'& ID != 'ITVESALZ')
+X4.1 <- X4 %>%
+  filter(ID != 'WNKOWTSP' & ID != 'IFUOWLYC' & ID != 'QZUBAVVA' & ID != 'DWYASHSC' & ID != 'FQTIDXBD'& ID != 'LNKRYMPE'& ID != 'OENJHTBX'& ID != 'IBTXSVUE'& ID != 'TUJTIRFK'& ID != 'ITVESALZ')
+X5.1 <- X5 %>%
+  filter(ID != 'WNKOWTSP' & ID != 'IFUOWLYC' & ID != 'QZUBAVVA' & ID != 'DWYASHSC' & ID != 'FQTIDXBD'& ID != 'LNKRYMPE'& ID != 'OENJHTBX'& ID != 'IBTXSVUE'& ID != 'TUJTIRFK'& ID != 'ITVESALZ')
+X6.1 <- X6 %>%
+  filter(ID != 'WNKOWTSP' & ID != 'IFUOWLYC' & ID != 'QZUBAVVA' & ID != 'DWYASHSC' & ID != 'FQTIDXBD'& ID != 'LNKRYMPE'& ID != 'OENJHTBX'& ID != 'IBTXSVUE'& ID != 'TUJTIRFK'& ID != 'ITVESALZ')
+Y.1 <- ids %>%
+  filter(ID != 'WNKOWTSP' & ID != 'IFUOWLYC' & ID != 'QZUBAVVA' & ID != 'DWYASHSC' & ID != 'FQTIDXBD'& ID != 'LNKRYMPE'& ID != 'OENJHTBX'& ID != 'IBTXSVUE'& ID != 'TUJTIRFK'& ID != 'ITVESALZ')
+
+
+
+
+X1.2 <- X1.1[! names(X1.1) %in% c('ID')]
+X2.2 <- X2.1[! names(X2.1) %in% c('ID')]
+X3.2 <- X3.1[! names(X3.1) %in% c('ID')]
+X4.2 <- X4.1[! names(X4.1) %in% c('ID')]
+X5.2 <- X5.1[! names(X5.1) %in% c('ID')]
+X6.2 <- X6.1[! names(X6.1) %in% c('ID')]
+
+
+
+#######
+
+X <- list(DMN = X1.2, ECN = X2.2, 
+          SN = X3.2)
+
+Y <- Y.1$Group
+
+```
+
+
+#### Setup design matrix
+
+3 networks
+
+```{r}
+
+
+design = matrix(0.1, ncol = length(X), nrow = length(X), 
+                dimnames = list(names(X), names(X)))
+
+
+diag(design) = 0 # set diagonal to 0s
+
+
+```
+
+#### Tuning the model
+
+```{r}
+basic.diablo.model = block.splsda(X = X, Y = Y, ncomp = 5, design = design) 
+
+perf.diablo = perf(basic.diablo.model, validation = 'Mfold', 
+                   folds = 10, nrepeat = 10) 
+
+plot(perf.diablo) # plot output of tuning
+
+# set the optimal ncomp value
+ncomp = perf.diablo$choice.ncomp$WeightedVote["Overall.BER", "centroids.dist"]
+
+# show the optimal choice for ncomp for each dist metric
+perf.diablo$choice.ncomp$WeightedVote
+
+```
+
+
+
+#### Setup and run the DIABLO model
+
+We conducted an analysis using the DIABLO model, with 10 folds and LOOCV approach.
+
+
+
+```{r}
+
+
+#note: We choose the optimal number of variables to select in each data set
+#using the tune.block.splsda() function
+
+# set grid of values for each component to test
+# DMN/ECN/SN/...
+test.keepX = list(DMN =c(1:9, seq(10, 30, 2), 35),
+                  ECN =c(1:9, seq(10, 18, 2), seq(20,25,5),seq(26,34,2)),
+                  SN =c(1:9, seq(10, 18, 2), seq(20,25,5),seq(26,34,2)))
+
+
+ 
+# library(BiocParallel)
+# BPPARAM <- BiocParallel::MulticoreParam(workers = parallel::detectCores()-1)
+# print(BPPARAM)
+# 
+# tune.RISC = tune.block.splsda(X = X, Y = Y,
+#                               test.keepX = test.keepX, design = design,
+#                               validation = 'Mfold', folds=5,  nrepeat=100,
+#                               dist = "centroids.dist", ncomp = 2,
+#                               seed='4982',BPPARAM=BPPARAM)
+# 
+# 
+# tune.RISC$choice.keepX
+
+
+# saveRDS(tune.RISC, file = "tuneTRD_DIABLO_kong200_3network_MaxDiff.Rds")
+
+```
+
+
+
+### Results
+
+#### Check the optimal values of features to retain in each X value
+
+Note: I read the outcome here.
+
+
+```{r, message=FALSE}
+
+tune.RISC <- readRDS(file = "tuneTRD_DIABLO_kong200_3network_MaxDiff.Rds")
+
+list.keepX = tune.RISC$choice.keepX # set the optimal values of features to retain
+list.keepX
+
+result.sparse.diablo.risc <-  block.splsda(X, Y, keepX = list.keepX,
+                                           design = design) 
+
+# the features selected to form the first component
+### 2 groups (Group HC/DEP; tuneTRD_DIABLO_PLS.Rds) with a PLS approach
+#DMN: 1
+#ECN: 5
+#SN: 1
+
+```
+
+#### Check the selected features of DMN (component=1)
+
+Here, we can see the list of variables (in component 1 of DMN).
+
+```{r}
+selectVar(result.sparse.diablo.risc, block = 'DMN', comp = 1)$DMN$name 
+
+```
+
+#### Check the selected features of DMN (component=2)
+
+Here, we can see the list of variables (in component 2 of DMN).
+
+```{r}
+selectVar(result.sparse.diablo.risc, block = 'DMN', comp = 2)$DMN$name 
+
+```
+
+#### Check the selected features of ECN (dimension=1)
+
+Desc
+
+```{r}
+selectVar(result.sparse.diablo.risc, block = 'ECN', comp = 1)$ECN$name 
+
+```
+
+#### Check the selected features of ECN (dimension=2)
+
+Desc
+
+```{r}
+selectVar(result.sparse.diablo.risc, block = 'ECN', comp = 2)$ECN$name 
+
+```
+
+#### Check the selected features of SN (dimension=1)
+
+Desc
+
+```{r}
+selectVar(result.sparse.diablo.risc, block = 'SN', comp = 1)$SN$name 
+
+```
+
+#### Check the selected features of SN (dimension=2)
+
+Desc
+
+```{r}
+selectVar(result.sparse.diablo.risc, block = 'SN', comp = 2)$SN$name 
+
+```
+
+#### Check the model performance using the package
+
+The model performance was estimated using the "RVAideMemoire" in R.
+
+* 2 groups (Group TRD/HC; tuneTRD_DIABLO_3network_MaxDiff.Rds)
+* 999 permutations
+* CER = .584
+* p-value = .938
+
+```{r}
+#library(RVAideMemoire)
+#DIABLO.test(result.sparse.diablo.risc)
+
+
+
+```
+
+#### Check the model performance using the AUC
+
+dsalkdsajdklsaj
+
+```{r}
+# run repeated CV performance evaluation
+perf.diablo = perf(result.sparse.diablo.risc, validation = 'Mfold', folds = 5,
+                   nrepeat = 100, auc = T,
+                   dist = 'centroids.dist') 
+
+perf.diablo$MajorityVote.error.rate
+
+perf.diablo$WeightedVote.error.rate
+
+perf.diablo$auc
+
+```
+
+###### DMN (component=1)
+
+```{r}
+auc.splsda = auroc(result.sparse.diablo.risc, roc.block = "DMN", 
+                   roc.comp = 1, print = FALSE)
+
+auc.splsda
+
+```
+
+###### DMN (component=2)
+
+```{r}
+auc.splsda = auroc(result.sparse.diablo.risc, roc.block = "DMN", 
+                   roc.comp = 2, print = FALSE)
+
+auc.splsda
+
+```
+
+###### ECN (component=1)
+
+```{r}
+auc.splsda = auroc(result.sparse.diablo.risc, roc.block = "ECN", 
+                   roc.comp = 1, print = FALSE)
+
+auc.splsda
+
+```
+
+###### ECN (component=2)
+
+```{r}
+auc.splsda = auroc(result.sparse.diablo.risc, roc.block = "ECN", 
+                   roc.comp = 2, print = FALSE)
+
+auc.splsda
+
+```
+
+###### SN (component=1)
+
+```{r}
+auc.splsda = auroc(result.sparse.diablo.risc, roc.block = "SN", 
+                   roc.comp = 1, print = FALSE)
+
+auc.splsda
+
+```
+
+###### SN (component=2)
+
+```{r}
+auc.splsda = auroc(result.sparse.diablo.risc, roc.block = "SN", 
+                   roc.comp = 2, print = FALSE)
+
+auc.splsda
+
+```
+
+### Plots
+
+#### Correlation among Xs (component=1)
+
+dsalkdsajdklsaj
+
+```{r, out.width = '100%'}
+plotDiablo(result.sparse.diablo.risc, ncomp = 1)
+
+```
+
+#### Correlation among Xs (component=2)
+
+dsalkdsajdklsaj
+
+```{r, out.width = '100%'}
+plotDiablo(result.sparse.diablo.risc, ncomp = 2)
+
+```
+
+#### Individual comparions between Xs
+dsalkdsajdklsaj
+
+```{r, out.width = '100%'}
+plotIndiv(result.sparse.diablo.risc, ind.names = FALSE, legend = TRUE, 
+          title = 'DIABLO Sample Plots')
+
+```
+
+#### Arrow plot
+
+dsalkdsajdklsaj
+
+```{r}
+plotArrow(result.sparse.diablo.risc, ind.names = F, legend = TRUE, 
+          title = 'DIABLO')
+```
+
+
+#### Correlation Circle Plot 1
+
+dsdskjdsk
+
+```{r, out.width = '100%'}
+plotVar(result.sparse.diablo.risc, var.names = FALSE, 
+        style = 'graphics', legend = TRUE,
+        pch = c(16, 17, 15), cex = c(2,2,2), 
+        col = c('darkorchid', 'brown1', 'lightgreen'))
+
+```
+
+#### Correlation Circle Plot 2
+
+dsdskjdsk
+
+```{r, out.width = '100%'}
+circosPlot(result.sparse.diablo.risc, cutoff = 0.6, line = TRUE,
+           color.blocks= c('darkorchid', 'brown1', 'lightgreen'),
+           color.cor = c("chocolate3","grey20"), size.labels = 1.5)
+```
+
+
+#### plot loadings of component 1
+
+dsdskjdsk
+
+```{r, echo=FALSE, fig.cap="Component 1", out.width = '100%'}
+
+plotLoadings(result.sparse.diablo.risc, comp = 1, contrib = 'max', method = 'median',size.name = .6)
+
+
+```
+
+
+
+
+#### plot loadings of component 2
+
+dsdskjdsk
+
+```{r, echo=FALSE, fig.cap="Component 2", out.width = '100%'}
+
+plotLoadings(result.sparse.diablo.risc, comp = 2, contrib = 'max', method = 'median',size.name = .6)
+
+
+```
+
+
+#### save contingency output
+
+dsdskjdsk
+
+```{r, echo=T}
+
+library(dplyr)
+library(pROC)
+
+res1 <- as.data.frame(perf.diablo$AveragedPredict.class$nrep10)
+res1$id <- rownames(res1)
+
+res2 <- as.data.frame(result.sparse.diablo.risc$Y)
+names(res2)[1] <- "Y"
+
+res3 <- cbind(res1, res2)
+
+res3 <- res3 %>%
+  mutate(Y.num  = ifelse(Y=="HC",ifelse(Y=="MDD",NA,1),0),
+         dim1.num  = ifelse(dim1=="HC",ifelse(dim1=="MDD",NA,1),0),
+         dim2.num  = ifelse(dim2=="HC",ifelse(dim2=="MDD",NA,1),0)) %>%
+  select(id, Y.num, dim1.num, dim2.num)
+
+write.csv(res3, "TRD_DIABLO_cont_3network_maxdiff_anx_broad.csv", row.names = F)
+
+
+```
+
+
+
+
+
+
+
